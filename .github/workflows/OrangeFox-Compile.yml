@@ -51,8 +51,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       FOX_DIR: ${{ github.workspace }}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
     permissions:
-      contents: write
-      artifacts: write  # 新增：适配 upload-artifact@v4 的权限要求
+      contents: write  # 只保留这一行，删除 artifacts: write
     steps:
     - name: 拉取仓库代码
       uses: actions/checkout@v4
@@ -162,10 +161,10 @@ jobs:
         cat $FOX_DIR/out/build.log >> error_logs.txt 2>&1
         echo "错误日志已收集"
 
-    - name: 上传错误日志（升级至v4）
+    - name: 上传错误日志
       if: failure()
-      uses: actions/upload-artifact@v4  # 关键修改：从v3升级到v4，解决版本弃用问题
+      uses: actions/upload-artifact@v4
       with:
         name: 错误日志
         path: error_logs.txt
-        retention-days: 7  # 新增：设置日志保留7天（可按需调整，默认90天）
+        retention-days: 7
