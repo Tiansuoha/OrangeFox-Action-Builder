@@ -49,7 +49,6 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # 定义统一的源码目录变量，避免重复输入路径
       FOX_DIR: ${{ github.workspace }}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
     permissions:
       contents: write
@@ -67,7 +66,6 @@ jobs:
       
     - name: 搭建编译环境
       run: |
-        # 安装必要依赖（补充官方文档要求的包）
         sudo apt update && sudo apt install -y \
           aria2 \
           openjdk-11-jdk \
@@ -77,9 +75,7 @@ jobs:
           libncurses5-dev \
           squashfs-tools \
           xsltproc
-        # 解决Python 2依赖（云环境默认Python 3）
         sudo ln -s /usr/bin/python2 /usr/bin/python
-        # 克隆OrangeFox工具脚本
         git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
         cd scripts
         sudo bash setup/android_build_env.sh
@@ -87,18 +83,13 @@ jobs:
       
     - name: 同步OrangeFox源码
       run: |
-        # 创建源码存放目录
         mkdir -p ${{ github.workspace }}/OrangeFox
         cd ${{ github.workspace }}/OrangeFox
-        # 配置Git信息
         git config --global user.name "${{ github.actor }}"
         git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-        # 克隆同步脚本
         git clone https://gitlab.com/OrangeFox/sync.git -b master
         cd sync
-        # 强制同步源码（--force避免缓存问题）
         ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path $FOX_DIR --force
-        # 检查源码目录是否创建成功
         if [ ! -d "$FOX_DIR" ]; then
           echo "错误：源码同步失败，未找到目录 $FOX_DIR"
           exit 1
@@ -107,54 +98,44 @@ jobs:
 
     - name: 克隆设备树
       run: |
-        # 检查源码目录是否存在
         if [ ! -d "$FOX_DIR" ]; then
           echo "错误：源码目录 $FOX_DIR 不存在，同步步骤失败"
           exit 1
         fi
         cd $FOX_DIR
-        # 创建设备树父目录（避免权限问题）
         mkdir -p $(dirname "${{ inputs.DEVICE_PATH }}")
-        # 克隆设备树
         git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
-        # 检查设备树是否克隆成功
         if [ ! -d "./${{ inputs.DEVICE_PATH }}" ]; then
           echo "错误：设备树克隆失败，路径 ${{ inputs.DEVICE_PATH }} 不存在"
           exit 1
         fi
-        # 记录设备树提交ID
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
         echo "设备树克隆完成，提交ID：${{ env.COMMIT_ID }}"
 
     - name: 编译OrangeFox
       run: |
-        # 检查源码目录
         if [ ! -d "$FOX_DIR" ]; then
           echo "错误：源码目录 $FOX_DIR 不存在"
           exit 1
         fi
         cd $FOX_DIR
-        # 初始化编译环境
         source build/envsetup.sh
-        # 设置编译参数（官方文档要求）
         export ALLOW_MISSING_DEPENDENCIES=true
-        export FOX_BUILD_DEVICE=${{ inputs.DEVICE_NAME }}  # 必须设置设备名变量
-        # 开始编译
+        export FOX_BUILD_DEVICE=${{ inputs.DEVICE_NAME }}
         echo "开始编译OrangeFox，目标设备：${{ inputs.DEVICE_NAME }}"
         lunch twrp_${{ inputs.DEVICE_NAME }}-eng && make clean && mka -j$(nproc) adbd ${{ inputs.BUILD_TARGET }}image
         echo "编译完成"
 
     - name: 配置发布信息
       run: |
-        # 记录编译日期（马尼拉时区）
         echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
-        # 处理设备树URL（去除.git后缀）
+        cd $FOX_DIR
         DEVICE_TREE_URL="${{ inputs.DEVICE_TREE }}"
         if [[ "$DEVICE_TREE_URL" == *.git ]]; then
           DEVICE_TREE_URL="${DEVICE_TREE_URL%.git}"
         fi
-        echo "DEVICE_TREE_URL=$DEVICE_TREE_URL" >> $GITHUB_ENV
+        echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
         echo "发布信息配置完成"
 
     - name: 上传编译产物到Release
@@ -171,15 +152,18 @@ jobs:
           设备树：[设备树/分支](${{ env.DEVICE_TREE_URL }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
           提交记录：最新 [提交](${{ env.DEVICE_TREE_URL }}/commit/${{ env.COMMIT_ID }})
 
+    # 拆分步骤：先收集日志（run），再上传日志（uses）
     - name: 编译失败时收集日志
       if: failure()
       run: |
-        # 收集同步日志和编译日志
         echo "===== 同步日志 =====" > error_logs.txt
         cat ${{ github.workspace }}/OrangeFox/sync/sync.log >> error_logs.txt 2>&1
         echo -e "\n\n===== 编译日志 =====" >> error_logs.txt
         cat $FOX_DIR/out/build.log >> error_logs.txt 2>&1
         echo "错误日志已收集"
+
+    - name: 上传错误日志
+      if: failure()
       uses: actions/upload-artifact@v3
       with:
         name: 错误日志
