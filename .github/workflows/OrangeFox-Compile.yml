@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      FOX_DIR: ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
     permissions:
       contents: write
     steps:
@@ -71,7 +72,6 @@ jobs:
         sudo bash setup/android_build_env.sh
       
     - name: Set-up Manifest
-      if: inputs.MANIFEST_BRANCH == '11.0' || inputs.MANIFEST_BRANCH == '12.1'
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/OrangeFox
         cd ${GITHUB_WORKSPACE}/OrangeFox
@@ -79,18 +79,34 @@ jobs:
         git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
         git clone https://gitlab.com/OrangeFox/sync.git -b master
         cd sync
-        ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${FOX_DIR}
+        # 验证目录是否存在
+        if [ ! -d "${FOX_DIR}" ]; then
+          echo "错误：OrangeFox 源码目录不存在！"
+          exit 1
+        fi
+        echo "OrangeFox 源码已成功克隆到 ${FOX_DIR}"
 
     - name: Clone Device Tree
       run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        # 验证目录是否存在
+        if [ ! -d "${FOX_DIR}" ]; then
+          echo "错误：OrangeFox 源码目录不存在！"
+          exit 1
+        fi
+        cd ${FOX_DIR}
         git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: Building OrangeFox
       run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        # 验证目录是否存在
+        if [ ! -d "${FOX_DIR}" ]; then
+          echo "错误：OrangeFox 源码目录不存在！"
+          exit 1
+        fi
+        cd ${FOX_DIR}
         set +e
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
@@ -100,7 +116,12 @@ jobs:
     - name: Set Release Properties
       run: |
         echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        # 验证目录是否存在
+        if [ ! -d "${FOX_DIR}" ]; then
+          echo "错误：OrangeFox 源码目录不存在！"
+          exit 1
+        fi
+        cd ${FOX_DIR}
 
         DEVICE_TREE_URL="${{ inputs.DEVICE_TREE }}"
         if [[ "${DEVICE_TREE_URL}" == *.git ]]; then
@@ -112,8 +133,8 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
-          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+          ${FOX_DIR}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
+          ${FOX_DIR}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
         name: OrangeFox Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
         tag_name: ${{ github.run_id }}
         body: |
@@ -121,4 +142,3 @@ jobs:
           Build: fox_${{ inputs.MANIFEST_BRANCH }}
           Device: [Device Tree/Branch](${{ env.DEVICE_TREE_URL }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
           Commit: Most recent [commit](${{ env.DEVICE_TREE_URL }}/commit/${{ env.COMMIT_ID }}) during building.
-          
