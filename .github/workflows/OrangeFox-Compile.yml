@@ -28,11 +28,11 @@ on:
       DEVICE_PATH:
         description: '指定你的设备路径'
         required: true
-        default: 'device/oplus/aston'
+        default: 'device/oplus/ossi'
       DEVICE_NAME:
         description: '指定你的设备代号'
         required: true
-        default: 'aston'
+        default: 'ossi'
       BUILD_TARGET:
         description: '指定你的构建目标'
         required: true
