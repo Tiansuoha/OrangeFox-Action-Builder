@@ -22,7 +22,7 @@ on:
         required: true
         default: 'https://github.com/Tiansuoha/android_device_oneplus_aston'
       DEVICE_TREE_BRANCH:
-        description: '橙狐设备树分支'
+        description: '设备树分支(看看是不是main)'
         required: true
         default: 'main'
       DEVICE_PATH:
@@ -32,7 +32,7 @@ on:
       DEVICE_NAME:
         description: '指定你的设备代号'
         required: true
-        default: 'ossi'
+        default: 'omni_ossi'
       BUILD_TARGET:
         description: '指定你的构建目标'
         required: true
@@ -95,7 +95,21 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         set -e
-        lunch twrp_${{ inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ inputs.BUILD_TARGET }}image
+
+        # 尝试使用 fox_ 前缀
+        if lunch fox_${{ inputs.DEVICE_NAME }}-eng; then
+          echo "成功加载 fox_${{ inputs.DEVICE_NAME }} 产品配置"
+        else
+          echo "未找到 fox_${{ inputs.DEVICE_NAME }} 配置，尝试 omni_ 前缀..."
+          # 回退到 omni_ 前缀
+          if ! lunch omni_${{ inputs.DEVICE_NAME }}-eng; then
+            echo "错误: 未找到 omni_${{ inputs.DEVICE_NAME }} 配置！"
+            exit 1
+          fi
+        fi
+    
+        # 继续执行构建
+        make clean && mka adbd ${{ inputs.BUILD_TARGET }}image
 
     - name: 设置发布属性
       run: |
