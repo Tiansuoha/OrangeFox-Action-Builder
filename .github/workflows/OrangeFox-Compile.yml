@@ -32,7 +32,7 @@ on:
       DEVICE_NAME:
         description: '指定你的设备代号'
         required: true
-        default: 'ossi'
+        default: 'omni_ossi'
       BUILD_TARGET:
         description: '指定你的构建目标'
         required: true
