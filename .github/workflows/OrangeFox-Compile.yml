@@ -24,7 +24,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: '橙狐设备树分支'
         required: true
-        default: 'android-12.1'
+        default: 'main'
       DEVICE_PATH:
         description: '指定你的设备路径'
         required: true
